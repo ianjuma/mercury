@@ -3,4 +3,6 @@ gevent
 celery[redis]
 celery[gevent]
 python-dotenv
-polling
+apscheduler==3.2.0
+grequests
+newrelic

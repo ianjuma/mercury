@@ -1,28 +1,52 @@
 #! /usr/bin/python
 
 import gevent
+from apscheduler.schedulers.gevent import GeventScheduler
+
 from services.bulkSMSService import BulkSMSService
 
-from os.path import join, dirname
-from dotenv import load_dotenv
+import logging
+import redis
+import datetime
+import settings
 
-import polling
+r = redis.StrictRedis(host='localhost', port=6379, db=0)
+
+import newrelic.agent
+application = newrelic.agent.application()
 
 
 class App:
+    @newrelic.agent.background_task(application)
     def run(self):
-       service = BulkSMSService()
-       service.grequest()
+        date      = r.get('CrunchDate')
+        date_1    = datetime.datetime.strptime(date, "%Y-%m-%d")
+
+        next_date = str((date_1 + datetime.timedelta(days = 1))).split(' ')[0]
+
+        r.set('CrunchDate', next_date)
+
+        service = BulkSMSService()
+        # services = [services]
+        # map(s.fetch, services)
+        # x foreach - x.fetch
+        service.fetchStats(
+            username = None,
+            date = date
+        )
 
 
 if __name__ == '__main__':
-    dotenv_path = join(dirname(__file__), '.env')
-    load_dotenv(dotenv_path)
+    logging.basicConfig()
 
     app = App()
+ 
+    scheduler = GeventScheduler()
+    scheduler.add_job(app.run, 'interval', minutes=3, id='stats')
 
-    polling.poll(
-        lambda: app.run(),
-        step=60,
-        poll_forever=True
-    )
+    g = scheduler.start()
+
+    try:
+        g.join()
+    except (KeyboardInterrupt, SystemExit):
+        pass

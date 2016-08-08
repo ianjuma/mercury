@@ -5,52 +5,49 @@ import gevent
 import gevent.monkey
 gevent.monkey.patch_socket()
 
-from actor import Actor
-
-import os
+import settings
 
 import requests
 import gevent
+from urllib import urlencode
 
 
-class BaseService(Actor):
-    base_url = 'http://134.213.60.56:8080/'
-    view     = ''
+class BaseService:
+    base_url = settings.base_url
+    date     = ''
 
     def build_url(self, username = None):
         if username is None:
-            return self.base_url + self.view
+            return self.base_url + self.get_view()
         else:
-            # urlencode
-            return self.base_url + self.view + "&" +username
+            f = { 'username': username }
+            return self.base_url + self.get_view() + "&" + urlencode(f)
 
-    def fetch_url(self, url):
-        headers = { 'apikey': os.getenv('APIKEY') }
+    def fetch_(self, url):
+        headers = { 'apikey': settings.api_key }
 
         r = requests.get(url, headers = headers)
         resp = r.json()
         return resp
 
-    def grequest_user(self, username):
-        print self.build_url(username)
-        thread = gevent.spawn( self.fetch_url,  self.build_url(username = username) )
-        thread.join()
+    def fetchStats(self, username, date):
+        # change date so view can update
+        self.date = date
 
-        self.processUserResponse( thread.value )
+        if username is not None:
+            thread = gevent.spawn( self.fetch_,  self.build_url(username = username) )
+            thread.join()
+            return self.processUserResponse( thread.value, username )
+        else:
+            thread = gevent.spawn( self.fetch_,  self.build_url(username = None) )
+            thread.join()
+            return self.processResponse( thread.value )
 
-    def grequest(self):
-        print self.build_url(None)
-        thread = gevent.spawn( self.fetch_url,  self.build_url(username = None) )
-        thread.join()
-
-        self.processResponse( thread.value )
+    def get_view(self):
+        raise NotImplemented
 
     def processResponse(self, response):
         raise NotImplemented
 
     def processUserResponse(self, response):
         raise NotImplemented
-
-    def receive(self, message):
-        self.grequest()
-        gevent.sleep(0)
